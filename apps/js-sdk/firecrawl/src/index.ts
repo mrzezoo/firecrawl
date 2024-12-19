@@ -157,6 +157,7 @@ export interface CrawlParams {
   webhook?: string | {
     url: string;
     headers?: Record<string, string>;
+    metadata?: Record<string, string>;
   };
   deduplicateSimilarURLs?: boolean;
   ignoreQueryParameters?: boolean;
@@ -182,6 +183,7 @@ export interface BatchScrapeResponse {
   url?: string;
   success: true;
   error?: string;
+  invalidURLs?: string[];
 }
 
 /**
@@ -245,6 +247,7 @@ export interface ExtractParams<LLMSchema extends zt.ZodSchema = any> {
   schema?: LLMSchema;
   systemPrompt?: string;
   allowExternalLinks?: boolean;
+  includeSubdomains?: boolean;
 }
 
 /**
@@ -575,9 +578,10 @@ export default class FirecrawlApp {
     pollInterval: number = 2,
     idempotencyKey?: string,
     webhook?: CrawlParams["webhook"],
+    ignoreInvalidURLs?: boolean,
   ): Promise<BatchScrapeStatusResponse | ErrorResponse> {
     const headers = this.prepareHeaders(idempotencyKey);
-    let jsonData: any = { urls, ...params };
+    let jsonData: any = { urls, webhook, ignoreInvalidURLs, ...params };
     if (jsonData?.extract?.schema) {
       let schema = jsonData.extract.schema;
 
@@ -620,10 +624,12 @@ export default class FirecrawlApp {
   async asyncBatchScrapeUrls(
     urls: string[],
     params?: ScrapeParams,
-    idempotencyKey?: string
+    idempotencyKey?: string,
+    webhook?: CrawlParams["webhook"],
+    ignoreInvalidURLs?: boolean,
   ): Promise<BatchScrapeResponse | ErrorResponse> {
     const headers = this.prepareHeaders(idempotencyKey);
-    let jsonData: any = { urls, ...(params ?? {}) };
+    let jsonData: any = { urls, webhook, ignoreInvalidURLs, ...(params ?? {}) };
     try {
       const response: AxiosResponse = await this.postRequest(
         this.apiUrl + `/v1/batch/scrape`,
@@ -656,8 +662,10 @@ export default class FirecrawlApp {
     urls: string[],
     params?: ScrapeParams,
     idempotencyKey?: string,
+    webhook?: CrawlParams["webhook"],
+    ignoreInvalidURLs?: boolean,
   ) {
-    const crawl = await this.asyncBatchScrapeUrls(urls, params, idempotencyKey);
+    const crawl = await this.asyncBatchScrapeUrls(urls, params, idempotencyKey, webhook, ignoreInvalidURLs);
 
     if (crawl.success && crawl.id) {
       const id = crawl.id;
